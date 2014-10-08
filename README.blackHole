@@ -1,0 +1,138 @@
+--------------------------------------------------------------------------------
+                                  - README -
+
+                            Nfsen BlackHole plugin
+
+ The purpose ot this Nfsen plugin is to Inject  prefixes (/32) into the router
+table via bgp community. With proprely applyed routing  policy this can be used
+for mitigating DDOS Attacks. (RTBH)
+
+ Backend perl script uses bgp_simple.pl
+(http://bgpsimple.googlecode.com/svn/trunk/bgp_simple.pl)
+--------------------------------------------------------------------------------
+TODO:
+	MAKE INSTLLATION Script
+	use config array !!!!!
+Installation:
+	- install monit
+		> pkg install monit-5.8.1 (freebsd)
+		> apt-get install monit	(debian)
+	- cd TEST && tar zxvf blackHole.tgz
+	- copy blackHole.pm in $BACKEND_PLUGINDIR
+	- copy bgp_simple_restart.sh in $BACKEND_PLUGINDIR
+	- copy bgp_simple.pl in $BACKEND_PLUGINDIR
+	- copy blackHole.php in $FRONTEND_PLUGINDIR
+	- in $VARDIR dir
+		(in my case $VARDIR="${BASEDIR}/var/nfsen"
+		$BASEDIR = "/usr/local";) i.e. ( /usr/local/var/nfsen ) make:
+		> touch blackhole-pref.td2 && chmown www:www blackhole-pref.td2
+		> touch blackHole.plugin.log && chown www:www blackHole.plugin.log
+--------------------------------------------------------------------------------
+NFSEN Configuration:
+	- Config monit to restart bgp_simple.pl daemon if file "blackhole-pref.td2" 
+	(advertised prefixes) is changed
+	    add this to monitrc:
+		---
+		check file blackhole with path /usr/local/var/nfsen/blackhole-pref.td2
+		        alert root@localhost on {timestamp,permission}
+		        if changed timestamp then alert
+		        if changed timestamp
+	                then exec "/usr/local/libexec/nfsen/plugins/bgp_simple_restart.sh"
+		---
+	- edit bgp_simple_restart.sh
+        - change path (depends on your installation dir...)
+        - change ASN (after -myas and -peeras options sent to bgp_simple.pl)
+	    - change neighbour ips (line 6)
+
+	- edit nfsen.conf
+	    	add in the @plugins array
+			[ '*',     'blackHole' ],
+	- edit blackHole.pm file and change community!!!! ( line 60 )
+
+Router Configuration:
+	- Juniper Router example config PASSIVE BGP site
+		-- bgp ---
+	        routing-instances International protocols bgp group NFSEN 
+		type internal;
+		local-address 10.113.0.6;
+		import [ nfsen-in deny_all ];
+		export deny_all;
+		neighbor 10.113.0.5 {
+		    description "Nfsen blackHole session";
+		    local-address 10.113.0.6;
+		    passive;
+		}
+		-- Routing Policy ---
+		[edit policy-options policy-statement nfsen-in ] 
+		term deny-other-then-32 {
+		    from {
+		        route-filter 0.0.0.0/0 upto /31;
+		    }
+		    then reject;
+		}
+		term allow {
+		    from {
+		        protocol bgp;
+		        community myISP-blackhole;
+		    }
+		    then {
+		        community add to-ISP1-blackhole;
+		        community add to-ISP2-blackhole;
+		        community add to-ISP3-blackhole;
+		        next-hop discard;
+		        accept;
+		    }
+		}
+		-- Community --
+        set policy-options community myISP-blackhole members MYAS:9999
+        set policy-options community to-ISP1-blackhole members XXXX:10000
+        set policy-options community to-ISP2-blackhole members YYYY:20000
+        set policy-options community to-ISP3-blackhole members ZZZZ:30000
+        (dotn't forget to remove the XXXX YYYY ZZZZ and set proper commnytity
+        string)
+
+
+Usage:
+    - NFsen Frontend Web
+        Plugins --> blackHole --> edit table add or delete prefix WITHOUT mask.
+Verify:
+
+    - Check received prefixes form nfsen server (from local router)
+	user@Juniper> show route receive-protocol bgp 10.113.0.5 detail
+	* xx.xx.xx.222/32 (1 entry, 1 announced)
+	     Accepted
+	     Nexthop: 10.113.0.5
+	     Localpref: 100
+	     AS path: I
+	     AS path: Recorded
+	     Communities: MYAS:9999
+	
+	* xx.xx.xx.223/32 (1 entry, 1 announced)
+	     Accepted
+	     Nexthop: 10.113.0.5
+	     Localpref: 100
+	     AS path: I
+	     AS path: Recorded
+	     Communities: MYAS:9999
+	
+	* yy.yy.yy.134/32 (1 entry, 1 announced)
+	     Accepted
+	     Nexthop: 10.113.0.5
+	     Localpref: 100
+	     AS path: I
+	     AS path: Recorded
+	     Communities: MYAS:9999
+	
+    - Check out your upstream advertisement communities for those routes to
+    other ISPs if you have agreement with those ISP for black hole communities
+
+user@Juniper-Edge> show route advertising-protocol bgp nei.gh.bour.ip xx.xx.xx.222/32 detail
+
+* xx.xx.xx.222/32 (1 entry, 1 announced)
+ BGP group DE-CIX type External
+     Nexthop: 80.8x.xx.xx
+     Flags: Nexthop Change
+     AS path: [MyAS] I
+     Communities: ZZZZ:30000 YYYY:20000 XXXX:10000 MYAS:9999
+
+--------------------------------------------------------------------------------
