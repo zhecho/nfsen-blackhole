@@ -4,7 +4,7 @@
                             Nfsen BlackHole plugin
 
  The purpose ot this Nfsen plugin is to Inject  prefixes (/32) into the router
-table via bgp community. With proprely applyed routing  policy this can be used
+table via bgp community. With proprely applied routing  policy this can be used
 for mitigating DDOS Attacks. (RTBH)
 
  Backend perl script uses bgp_simple.pl
