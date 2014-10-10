@@ -12,7 +12,8 @@ for mitigating DDOS Attacks. (RTBH)
 --------------------------------------------------------------------------------
 TODO:
 	MAKE INSTLLATION Script
-	use config array !!!!!
+	use config array !
+    Repair php table !
 Installation:
 	- install monit
 		> pkg install monit-5.8.1 (freebsd)
